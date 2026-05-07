@@ -25,7 +25,7 @@ _IPV4_RE = re.compile(
     r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$"
 )
 _SERIAL_RE = re.compile(r"^[A-Z0-9]{8,20}$", re.IGNORECASE)
-_ACCESS_CODE_RE = re.compile(r"^\d{8}$")
+_ACCESS_CODE_RE = re.compile(r"^[0-9a-fA-F]{8}$")
 
 
 def _ask(prompt: str, default: str | None = None, validator=None, hint: str | None = None) -> str:
@@ -116,12 +116,12 @@ def run_setup() -> int:
         print()
         print("   On the printer screen, go to:")
         print("     Settings → General → LAN Only Mode → make sure it's ON.")
-        print("     The 8-digit Access Code appears below the toggle.")
+        print("     The 8-character Access Code appears below the toggle.")
         access = _ask(
-            "LAN access code (8 digits)",
+            "LAN access code (8 characters)",
             default=existing.get("access_code"),
             validator=lambda v: _ACCESS_CODE_RE.match(v) is not None,
-            hint="Exactly 8 digits, e.g. 12345678",
+            hint="Exactly 8 characters (digits and/or a-f), e.g. 12345678 or da8ce55e",
         )
 
         cfg = {
