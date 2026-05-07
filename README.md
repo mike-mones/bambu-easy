@@ -19,7 +19,7 @@ The script will:
 1. Create a Python virtual environment (`.venv/`)
 2. Install `bambu-easy`
 3. Launch an interactive wizard that:
-   - Asks for your printer's IP, serial number, and 8-digit LAN access code (find these on the printer's touchscreen — the wizard tells you exactly where)
+   - Asks for your printer's IP, serial number, and 8-character access code (find these on the printer's touchscreen or in Bambu Studio — the wizard tells you exactly where)
    - Installs the bundled filament presets into your Bambu Studio install
    - Runs a doctor check to confirm everything works
 
@@ -91,7 +91,7 @@ Supported: `0.2`, `0.4`, `0.6`, `0.8` mm.
 | Message | What to do |
 |---|---|
 | `Bambu Studio CLI NOT found` | Install Bambu Studio from <https://bambulab.com/en/download/studio>. The CLI is bundled with the GUI. |
-| `Printer offline` / `did not respond` | Check the printer is on, on Wi-Fi, and that LAN Only Mode is enabled with the access code in `printer_config.json`. |
+| `Printer offline` / `did not respond` | Check the printer is on and on the same Wi-Fi network. Re-verify the IP and access code (the IP can change after router reboots). LAN Only Mode does NOT need to be enabled — only enable it as a last resort if MQTT polling keeps failing on older firmware. |
 | `Nozzle mismatch` | Either swap the physical nozzle on the printer to match, or re-run without `-n`. Use `--force` only if you know what you're doing. |
 | `Could not determine filament` | Either load a recognized spool in the AMS, or pass `-f "PLA Matte"` (etc.) explicitly. |
 | `Source 3MF was built for <printer>. Retargeting...` | Just informational — the file was uploaded for a non-P2S printer; bambu-easy is calling Bambu Studio CLI to convert it. Takes ~10s. |

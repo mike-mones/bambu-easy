@@ -63,6 +63,12 @@ If the user has a preference, surface the flags:
   `bambu_easy/` top level.
 - **Don't suggest the user manually edit `printer_config.json`** — `--setup`
   handles it. Sending them to a JSON editor is a regression of UX.
+- **Don't tell the user to enable "LAN Only Mode" on the printer as a fix
+  for connection problems.** bambu-easy works whether LAN Only Mode is on
+  or off; enabling it disables the user's cloud features (mobile app,
+  remote start, remote camera). It is only a last-resort workaround for
+  older firmware where the local MQTT broker won't accept connections in
+  cloud mode. Try IP/access-code/network checks FIRST.
 - **Don't offer to "tune" the slicer settings** the tool bakes in. Those
   values are pinned for a reason (e.g., the May 2026 230°C bug — wrong
   filament_settings_id silently regresses PLA Matte to 220°C).

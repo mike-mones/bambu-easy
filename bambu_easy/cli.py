@@ -110,7 +110,14 @@ def cmd_doctor() -> int:
     print("Polling printer over MQTT (up to 8s)...")
     status = query_printer_status(cfg, timeout=8.0)
     if status is None:
-        _warn("Printer did not respond. It may be off, on a different network, or LAN-only mode is disabled.")
+        _warn("Printer did not respond. Common causes:")
+        print("    • Printer is off or asleep.")
+        print("    • Printer is on a different Wi-Fi network than this machine.")
+        print(f"    • The IP address has changed (current config: {cfg.get('printer_ip')}).")
+        print("    • The access code is wrong (re-check it in Bambu Studio or on the printer).")
+        print("    • [Rare] Older firmware may need 'LAN Only Mode' enabled (Settings →")
+        print("      General → LAN Only Mode). This disables cloud features (mobile app,")
+        print("      remote start, remote camera) — only enable as a last resort.")
         print("    bambu-easy can still work — it will fall back to settings baked in the source 3MF.")
         return 0
     _ok(f"Printer online — nozzle {status.get('nozzle_diameter')}mm ({status.get('nozzle_type')})")
