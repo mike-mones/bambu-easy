@@ -42,7 +42,7 @@ bambu-easy --doctor   # confirms everything is wired up
 
 That's it. No tweaking sliders. No filament profile dropdowns.
 
-> **You do NOT need to pre-open the MakerWorld file in Bambu Studio first.** Even if the file was uploaded for a different printer (X1C, A1, etc.), `bambu-easy` rewrites the printer, presets, bed type, and temperatures to match the P2S automatically. The headless BS validator confirms the result before the file is handed back to you.
+> **You do NOT need to pre-open the MakerWorld file in Bambu Studio first.** Even if the file was uploaded for a different printer (X1C, A1 mini, P1S, etc.), `bambu-easy` automatically calls Bambu Studio's CLI to retarget the file to your P2S, then bakes the right filament/temperature/process settings on top. The headless BS validator confirms the result before the file is handed back to you.
 
 ## Quality tiers
 
@@ -88,6 +88,8 @@ Supported: `0.2`, `0.4`, `0.6`, `0.8` mm.
 | `Printer offline` / `did not respond` | Check the printer is on, on Wi-Fi, and that LAN Only Mode is enabled with the access code in `printer_config.json`. |
 | `Nozzle mismatch` | Either swap the physical nozzle on the printer to match, or re-run without `-n`. Use `--force` only if you know what you're doing. |
 | `Could not determine filament` | Either load a recognized spool in the AMS, or pass `-f "PLA Matte"` (etc.) explicitly. |
+| `Source 3MF was built for <printer>. Retargeting...` | Just informational — the file was uploaded for a non-P2S printer; bambu-easy is calling Bambu Studio CLI to convert it. Takes ~10s. |
+| `Auto-conversion failed` | Open Bambu Studio at least once so it has its system presets installed. If it still fails, follow the manual fallback printed beneath the error. |
 | `BS slice validation FAILED` | Open the output `_ready.3mf` in Bambu Studio to see the toast error. The validator caught a setting BS won't accept; try a different quality tier or report the file. |
 
 | `--skip-bs-validate` | Skip the headless BS slice (saves 10–30s, less safe) |

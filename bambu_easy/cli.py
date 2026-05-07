@@ -29,6 +29,8 @@ from .printer import (
     load_config,
     query as query_printer_status,
 )
+from .source_check import check_source_3mf
+from .auto_convert import convert_to_p2s
 
 QUALITY_TIERS = ("fast", "standard", "quality", "premium")
 
@@ -211,6 +213,30 @@ def main(argv: list[str] | None = None) -> int:
     if os.path.abspath(output_path) == os.path.abspath(input_path):
         _fail("Output path must differ from input — refusing to overwrite the source.")
         return 2
+
+    # 0. Source-printer check. If this 3MF was uploaded for a non-P2S printer
+    # (common with MakerWorld downloads), retarget it via BS CLI before
+    # continuing. BS does this internally when a user opens such a file in
+    # the GUI; we automate the equivalent.
+    source = check_source_3mf(input_path)
+    if not source.is_p2s:
+        _info(f"🔄 Source 3MF was built for {source.detected_printer}.")
+        _info("   Retargeting to Bambu Lab P2S via Bambu Studio CLI...")
+        conv = convert_to_p2s(input_path)
+        if not conv.success:
+            _fail(f"Auto-conversion failed: {conv.message}")
+            print()
+            print("   📋 Fallback (one-time, ~30 seconds):")
+            print(f"     1. Open the file in Bambu Studio: {input_path}")
+            print("     2. Click YES when asked to switch to your current printer.")
+            print("     3. File → Save Project (⌘S / Ctrl+S).")
+            print(f"     4. Re-run: bambu-easy {input_path}")
+            return 2
+        _ok(f"Retargeted ({conv.message})")
+        # Replace input_path for the rest of the pipeline; the user's
+        # output path is still derived from the ORIGINAL filename so they
+        # don't end up with `converted_ready.3mf`.
+        input_path = conv.converted_path or input_path
 
     # 1. Try to query printer (best effort)
     try:
