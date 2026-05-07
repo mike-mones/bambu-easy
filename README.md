@@ -42,6 +42,8 @@ bambu-easy --doctor   # confirms everything is wired up
 
 That's it. No tweaking sliders. No filament profile dropdowns.
 
+> **You do NOT need to pre-open the MakerWorld file in Bambu Studio first.** Even if the file was uploaded for a different printer (X1C, A1, etc.), `bambu-easy` rewrites the printer, presets, bed type, and temperatures to match the P2S automatically. The headless BS validator confirms the result before the file is handed back to you.
+
 ## Quality tiers
 
 Pass `-q <tier>`:

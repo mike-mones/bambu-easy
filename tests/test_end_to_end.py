@@ -64,3 +64,57 @@ def test_e2e_all_nozzles(squish_3mf, tmp_path):
         with zipfile.ZipFile(out) as zf:
             merged = json.loads(zf.read("Metadata/project_settings.config"))
         assert merged["nozzle_diameter"] == [nozzle.replace("mm", "")]
+
+
+def test_e2e_converts_x1c_makerworld_to_p2s(squish_3mf, tmp_path):
+    """Simulates a raw MakerWorld download targeted at an X1C — the user has
+    NOT pre-opened it in BS to swap to the P2S preset. bambu-easy must
+    overwrite the printer / preset / bed-type / temp fields completely so
+    the output is a proper P2S 3MF.
+
+    Verified end-to-end against the live BS CLI on 2026-05-07: BS sliced
+    the converted file with rc=0. This test enforces the field-level
+    contract; the BS-CLI confirmation is what validates that contract is
+    actually sufficient for BS to accept the file.
+    """
+    import shutil
+    raw = tmp_path / "raw_x1c.3mf"
+    shutil.copy(squish_3mf, raw)
+
+    # Rewrite source to look like an X1C upload from MakerWorld
+    other_files = {}
+    with zipfile.ZipFile(raw, "r") as zf:
+        src = json.loads(zf.read("Metadata/project_settings.config").decode())
+        for n in zf.namelist():
+            if n != "Metadata/project_settings.config":
+                other_files[n] = zf.read(n)
+    src["printer_settings_id"] = "Bambu Lab X1 Carbon 0.4 nozzle"
+    src["print_settings_id"] = "0.20mm Standard @BBL X1C"
+    src["filament_settings_id"] = ["Bambu PLA Basic @BBL X1C"]
+    src["nozzle_temperature"] = ["220"]
+    src["curr_bed_type"] = "Cool Plate"  # X1C default — wrong for our PLA Matte
+    with zipfile.ZipFile(raw, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("Metadata/project_settings.config", json.dumps(src, indent=2))
+        for n, data in other_files.items():
+            zf.writestr(n, data)
+
+    out = tmp_path / "x1c_to_p2s_ready.3mf"
+    prepare_3mf(
+        input_path=str(raw),
+        output_path=str(out),
+        nozzle="0.4mm",
+        material="PLA Matte",
+        tier="standard",
+        do_bs_validate=False,
+    )
+
+    with zipfile.ZipFile(out) as zf:
+        merged = json.loads(zf.read("Metadata/project_settings.config"))
+
+    # Every X1C-specific field must be replaced with the P2S equivalent
+    assert merged["printer_settings_id"] == "Bambu Lab P2S 0.4 nozzle"
+    assert merged["print_settings_id"] == ""
+    assert merged["filament_settings_id"][0].startswith("Mike PLA Matte 230C")
+    assert merged["nozzle_temperature"] == ["230"]
+    assert merged["curr_bed_type"] == "Textured PEI Plate"
+    assert merged["nozzle_diameter"] == ["0.4"]
