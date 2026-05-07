@@ -25,4 +25,7 @@ build-backend = "setuptools.build_meta"
 include = ["bambu_easy*"]
 
 [tool.setuptools.package-data]
-bambu_easy = ["../tests/fixtures/*.3mf"]
+bambu_easy = [
+  "../tests/fixtures/*.3mf",
+  "data/presets/filament/*.json",
+]

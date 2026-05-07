@@ -31,6 +31,8 @@ from .printer import (
 )
 from .source_check import check_source_3mf
 from .auto_convert import convert_to_p2s
+from .install_presets import install_presets, verify_preset_names_match_engine
+from .setup_wizard import run_setup
 
 QUALITY_TIERS = ("fast", "standard", "quality", "premium")
 
@@ -63,7 +65,36 @@ def cmd_doctor() -> int:
         print("    Install Bambu Studio from https://bambulab.com/en/download/studio")
         print("    Without it, --bs-validate cannot run (you'll need --skip-bs-validate).")
 
-    # 2. printer_config.json
+    # 2. User presets installed in BS
+    from .install_presets import (
+        bs_user_data_root,
+        find_active_user_dir,
+        list_vendored_presets,
+    )
+    bs_root = bs_user_data_root()
+    if bs_root and bs_root.is_dir():
+        active = find_active_user_dir(bs_root)
+        if active:
+            target_filament = active / "filament"
+            installed = {p.name for p in target_filament.glob("*.json")} if target_filament.is_dir() else set()
+            shipped = {p.name for p in list_vendored_presets()}
+            missing = shipped - installed
+            if not missing:
+                _ok(f"Filament user presets installed ({len(shipped)} files)")
+            else:
+                _warn(f"Filament user presets MISSING: {len(missing)} of {len(shipped)}")
+                for name in sorted(missing):
+                    print(f"      - {name}")
+                print("    Run: bambu-easy --install-presets")
+        else:
+            _warn(f"No Bambu Studio user account under {bs_root / 'user'}")
+            print("    Sign in to Bambu Studio at least once, then run:")
+            print("      bambu-easy --install-presets")
+    else:
+        _warn("Bambu Studio user-data folder not found")
+        print("    Open Bambu Studio at least once.")
+
+    # 3. printer_config.json
     cfg_path = config_path()
     try:
         cfg = load_config()
@@ -72,9 +103,10 @@ def cmd_doctor() -> int:
         print(f"    serial:      {cfg.get('serial', '(missing)')}")
     except PrinterConfigError as exc:
         _fail(str(exc))
+        print("    Run: bambu-easy --setup")
         return 1
 
-    # 3. MQTT reachable
+    # 4. MQTT reachable
     print("Polling printer over MQTT (up to 8s)...")
     status = query_printer_status(cfg, timeout=8.0)
     if status is None:
@@ -188,11 +220,30 @@ def main(argv: list[str] | None = None) -> int:
                         help="Check install: BS CLI + printer config + MQTT reachability.")
     parser.add_argument("--self-test", action="store_true",
                         help="Run end-to-end on bundled fixture.")
+    parser.add_argument("--setup", action="store_true",
+                        help="Interactive first-time setup wizard.")
+    parser.add_argument("--install-presets", action="store_true",
+                        help="Copy bambu-easy's filament presets into Bambu Studio.")
     parser.add_argument("--debug", action="store_true",
                         help="Show full Python traceback on unexpected errors.")
     parser.add_argument("--version", action="version", version=f"bambu-easy {__version__}")
     args = parser.parse_args(argv)
 
+    if args.setup:
+        return run_setup()
+    if args.install_presets:
+        result = install_presets(overwrite=False)
+        if not result.success:
+            _fail(result.message)
+            return 2
+        for name in result.installed:
+            _ok(f"Installed: {name}")
+        for name in result.skipped:
+            print(f"⏭  Already there: {name}")
+        print(f"Target: {result.target_dir}")
+        if result.installed:
+            print("ℹ️  Quit and re-open Bambu Studio so it picks up the new presets.")
+        return 0
     if args.doctor:
         return cmd_doctor()
     if args.self_test:

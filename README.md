@@ -18,16 +18,22 @@ cd bambu-easy
 The script will:
 1. Create a Python virtual environment (`.venv/`)
 2. Install `bambu-easy`
-3. Ask for your printer's IP, access code, and serial number
+3. Launch an interactive wizard that:
+   - Asks for your printer's IP, serial number, and 8-digit LAN access code (find these on the printer's touchscreen — the wizard tells you exactly where)
+   - Installs the bundled filament presets into your Bambu Studio install
+   - Runs a doctor check to confirm everything works
 
-Find those values in Bambu Studio: **Device → Settings → LAN Only Mode**.
-
-After setup:
+Already have it installed and just need to redo something?
 
 ```bash
 source .venv/bin/activate
-bambu-easy --doctor   # confirms everything is wired up
+bambu-easy --setup            # re-run the full wizard
+bambu-easy --install-presets  # just refresh the BS presets
+bambu-easy --doctor           # health check
 ```
+
+> **Got Copilot?** Just open this folder and ask it: "set this up for me."
+> The included `.github/copilot-instructions.md` tells Copilot exactly what to do.
 
 ## Your first print
 
