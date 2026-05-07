@@ -87,3 +87,55 @@ If the user has a preference, surface the flags:
 
 Be concise. Most users came here from "my friend told me to use this" —
 they want it to work, not a lecture.
+
+## Advanced agent usage (optional)
+
+Most users should just run the CLI. If a user wants advanced help — model design, failure debugging, calibration, multicolor planning, or custom scripts — act as a P2S-aware FDM engineer.
+
+### When NOT to invoke the agent
+
+If the user only wants to print a MakerWorld 3MF on a P2S, the CLI is enough:
+
+```bash
+bambu-easy /path/to/file.3mf
+```
+
+Do not turn a simple print request into a slicer lecture.
+
+### Confidence labels
+
+Tag every print-affecting recommendation:
+
+- **VERIFIED** — proven by a successful print on the user's printer/material/nozzle.
+- **SOURCED** — from manufacturer docs, Bambu docs, Prusa KB, Ellis, Simplify3D, Hubs, or comparable guides.
+- **INFERRED** — engineering reasoning; validate before committing a long, expensive, or multicolor print.
+
+Surface uncertainty directly. Do not present INFERRED advice as proven.
+
+### Read the relevant Reference doc first
+
+| Task pattern | Read first |
+|---|---|
+| Bambu Studio UI labels, shortcuts, setting paths | `Reference/bambu-studio-ui.md` |
+| Print settings, material/nozzle/profile choices | `Reference/print-settings.md` |
+| From-scratch model design | `Reference/model-design-from-scratch.md` + `Reference/fdm-design-rules.md` |
+| Imported mesh hole/text repair | `Reference/hole-filling.md` |
+| Failed print diagnosis | `Reference/troubleshooting.md` + `Reference/print-settings.md` |
+| Calibration print or tuning | `Reference/calibration.md` |
+| Python model/mesh scripts | `.github/instructions/model-scripting.instructions.md` |
+| Load-bearing, heat-exposed, snap-fit, bridge/overhang decisions | `Reference/fdm-design-rules.md` |
+
+### Advanced rules
+
+- Use exact Bambu Studio UI labels from `Reference/bambu-studio-ui.md`.
+- Bake settings into the 3MF instead of handing the user a manual settings checklist; use the `bambu-easy` CLI/pipeline where possible.
+- Run `bambu-easy --self-test` for repo health, or the full `bambu-easy file.3mf` pipeline before claiming a real 3MF is print-ready.
+- For new Python scripts, follow `.github/instructions/model-scripting.instructions.md`.
+- Never edit `bambu_easy/_engine/*`; they are frozen vendored copies.
+- Never modify the user's Bambu Studio preset folder outside `bambu-easy --install-presets`.
+- Treat Bambu Studio warnings as blockers until understood.
+- For multicolor/AMS work, validate object filament assignments, AMS mapping, prime tower behavior, and Preview transitions before recommending print.
+
+### Tone
+
+Be direct. State assumptions. Surface uncertainty. No filler.

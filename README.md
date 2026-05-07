@@ -1,9 +1,9 @@
 # bambu-easy
 
-Take a 3MF file. Get back a 3MF that's ready to print on Mike's Bambu Lab P2S — with the right
+Take a 3MF file. Get back a 3MF that's ready to print on a Bambu Lab P2S — with the right
 nozzle, the right temperatures, and zero settings warnings in Bambu Studio.
 
-This is a wrapper around proven logic from Mike's full 3D-printing workspace, packaged for
+This is a wife-friendly wrapper around proven P2S preparation logic, packaged for
 non-technical users. It does **not** start prints — you still hit Print in Bambu Studio. It just
 makes sure the file is correct before you do.
 
@@ -103,6 +103,22 @@ Supported: `0.2`, `0.4`, `0.6`, `0.8` mm.
 | `--force` | Bypass nozzle-mismatch hard-stop (NOT recommended) |
 | `--debug` | Show full Python traceback on unexpected errors |
 
+## For power users: optional Copilot agent
+
+`bambu-easy` also ships with Copilot agent instructions and a small `Reference/` knowledge base. If you have GitHub Copilot CLI or VS Code Copilot, open this folder and ask for advanced P2S help: model design, failed-print diagnosis, calibration plans, multicolor risk checks, or custom 3D-model scripts.
+
+The regular CLI remains the right tool for ordinary MakerWorld files. The agent is for the 5% of jobs where you want an engineer, not just a one-command bake.
+
+Reference docs are browsable without an agent:
+
+- [`Reference/fdm-design-rules.md`](Reference/fdm-design-rules.md) — FDM geometry, tolerances, orientation, supports, material limits.
+- [`Reference/bambu-studio-ui.md`](Reference/bambu-studio-ui.md) — exact Bambu Studio labels, shortcuts, and setting paths.
+- [`Reference/print-settings.md`](Reference/print-settings.md) — P2S filament/nozzle/profile settings and 3MF baking notes.
+- [`Reference/hole-filling.md`](Reference/hole-filling.md) — imported mesh hole repair and trimesh mesh-surgery workflow.
+- [`Reference/model-design-from-scratch.md`](Reference/model-design-from-scratch.md) — math-first build123d/trimesh model design workflow.
+- [`Reference/calibration.md`](Reference/calibration.md) — first layer, flow, pressure advance, temperature, retraction, and max-flow procedures.
+- [`Reference/troubleshooting.md`](Reference/troubleshooting.md) — symptom-to-cause-to-fix tables for common P2S print failures.
+
 ## What lives where
 
 ```
@@ -120,8 +136,3 @@ bambu_easy/
 ```
 
 Run `tools/sync_engine.sh` to refresh the `_engine/` files from the source repo.
-
----
-
-For advanced model editing or designing from scratch, see Mike's full workspace at
-**<TODO: link to Mike's 3D Printing repo>**.
