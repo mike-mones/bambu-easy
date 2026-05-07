@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
+import shutil
+import subprocess
 import sys
 import traceback
 from pathlib import Path
@@ -176,6 +179,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="Skip the headless BS slice (faster, less safe).")
     parser.add_argument("--force", action="store_true",
                         help="Bypass nozzle-mismatch hard-stop.")
+    parser.add_argument("--no-open", dest="auto_open", action="store_false",
+                        help="Don't auto-open the result in Bambu Studio.")
+    parser.set_defaults(auto_open=True)
     parser.add_argument("--doctor", action="store_true",
                         help="Check install: BS CLI + printer config + MQTT reachability.")
     parser.add_argument("--self-test", action="store_true",
@@ -294,8 +300,44 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print()
-    _ok(f"Done! Open {output_path} in Bambu Studio and press Print.")
+    _ok(f"Done! Output: {output_path}")
+    if args.auto_open:
+        opened, msg = _open_in_default_app(output_path)
+        if opened:
+            print(f"   🚀 Opening in Bambu Studio... ({msg})")
+            print("   When BS finishes loading, just press Print.")
+        else:
+            _warn(f"Couldn't auto-open ({msg}). Open it manually in Bambu Studio and press Print.")
+    else:
+        print(f"   Open {output_path} in Bambu Studio and press Print.")
     return 0
+
+
+def _open_in_default_app(path: str) -> tuple[bool, str]:
+    """Open a file in the OS default handler (Bambu Studio for .3mf).
+
+    Returns (success, message). Never raises — auto-open is a convenience,
+    not a critical step. macOS uses `open`, Windows uses `os.startfile`,
+    Linux uses `xdg-open`.
+    """
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            subprocess.run(["open", path], check=True, timeout=10)
+            return True, "macOS open"
+        if system == "Windows":
+            os.startfile(path)  # type: ignore[attr-defined]
+            return True, "Windows shell"
+        if system == "Linux":
+            if shutil.which("xdg-open") is None:
+                return False, "xdg-open not installed"
+            subprocess.run(["xdg-open", path], check=True, timeout=10)
+            return True, "xdg-open"
+        return False, f"unsupported platform: {system}"
+    except subprocess.CalledProcessError as exc:
+        return False, f"launcher exit {exc.returncode}"
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"{type(exc).__name__}: {exc}"
 
 
 if __name__ == "__main__":

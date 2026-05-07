@@ -88,8 +88,10 @@ Supported: `0.2`, `0.4`, `0.6`, `0.8` mm.
 | `Could not determine filament` | Either load a recognized spool in the AMS, or pass `-f "PLA Matte"` (etc.) explicitly. |
 | `BS slice validation FAILED` | Open the output `_ready.3mf` in Bambu Studio to see the toast error. The validator caught a setting BS won't accept; try a different quality tier or report the file. |
 
-For power users: `--skip-bs-validate` skips the headless slicer check (saves 10–30s per run),
-but you lose the strongest guarantee that BS will accept the file. Don't use it on first install.
+| `--skip-bs-validate` | Skip the headless BS slice (saves 10–30s, less safe) |
+| `--no-open` | Don't auto-open the result in Bambu Studio (default opens automatically) |
+| `--force` | Bypass nozzle-mismatch hard-stop (NOT recommended) |
+| `--debug` | Show full Python traceback on unexpected errors |
 
 ## What lives where
 
