@@ -1,0 +1,5 @@
+{
+    "printer_ip": "192.168.X.X",
+    "access_code": "PASTE_FROM_BS_LAN_MODE",
+    "serial": "PASTE_PRINTER_SERIAL"
+}

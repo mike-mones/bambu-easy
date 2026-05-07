@@ -1,0 +1,302 @@
+"""bambu-easy CLI."""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import traceback
+from pathlib import Path
+
+from . import __version__
+from ._engine.bs_validation import (
+    DEFAULT_BS_CLI_PATH,
+    ValidationError,
+    validate_bs_cli,
+)
+from .filament_picker import (
+    FilamentResolutionError,
+    SUPPORTED_MATERIALS,
+    pick_filament,
+)
+from .nozzle_picker import SUPPORTED_NOZZLES, pick_nozzle
+from .prepare import default_output, prepare_3mf
+from .printer import (
+    PrinterConfigError,
+    config_path,
+    load_config,
+    query as query_printer_status,
+)
+
+QUALITY_TIERS = ("fast", "standard", "quality", "premium")
+
+
+def _info(msg: str) -> None:
+    print(msg)
+
+
+def _ok(msg: str) -> None:
+    print(f"✅ {msg}")
+
+
+def _warn(msg: str) -> None:
+    print(f"⚠️  {msg}")
+
+
+def _fail(msg: str) -> None:
+    print(f"❌ {msg}", file=sys.stderr)
+
+
+def cmd_doctor() -> int:
+    print("bambu-easy doctor")
+    print("─────────────────")
+
+    # 1. BS CLI
+    if os.path.exists(DEFAULT_BS_CLI_PATH):
+        _ok(f"Bambu Studio CLI found: {DEFAULT_BS_CLI_PATH}")
+    else:
+        _warn(f"Bambu Studio CLI NOT found at {DEFAULT_BS_CLI_PATH}")
+        print("    Install Bambu Studio from https://bambulab.com/en/download/studio")
+        print("    Without it, --bs-validate cannot run (you'll need --skip-bs-validate).")
+
+    # 2. printer_config.json
+    cfg_path = config_path()
+    try:
+        cfg = load_config()
+        _ok(f"printer_config.json valid: {cfg_path}")
+        print(f"    printer_ip:  {cfg['printer_ip']}")
+        print(f"    serial:      {cfg.get('serial', '(missing)')}")
+    except PrinterConfigError as exc:
+        _fail(str(exc))
+        return 1
+
+    # 3. MQTT reachable
+    print("Polling printer over MQTT (up to 8s)...")
+    status = query_printer_status(cfg, timeout=8.0)
+    if status is None:
+        _warn("Printer did not respond. It may be off, on a different network, or LAN-only mode is disabled.")
+        print("    bambu-easy can still work — it will fall back to settings baked in the source 3MF.")
+        return 0
+    _ok(f"Printer online — nozzle {status.get('nozzle_diameter')}mm ({status.get('nozzle_type')})")
+    spools = status.get("spools") or []
+    loaded = [s for s in spools if s.get("type")]
+    if loaded:
+        print(f"    AMS: {len(loaded)} loaded slot(s)")
+        for s in loaded:
+            label = (s.get("sub_brand") or s.get("type") or "?")
+            print(f"      {s['slot']}: {label}  ({s.get('remain', '?')}%)")
+    return 0
+
+
+def cmd_self_test(skip_bs_validate: bool, debug: bool) -> int:
+    here = Path(__file__).resolve().parent
+    fixture = here.parent / "tests" / "fixtures" / "squish_test.3mf"
+    if not fixture.exists():
+        _fail(f"Bundled test fixture missing: {fixture}")
+        return 2
+    out = fixture.with_name("squish_test_ready.3mf")
+    print(f"Self-test: preparing {fixture}")
+    try:
+        result = prepare_3mf(
+            input_path=str(fixture),
+            output_path=str(out),
+            nozzle="0.4mm",
+            material="PLA Matte",
+            tier="standard",
+            do_bs_validate=not skip_bs_validate,
+        )
+    except ValidationError as exc:
+        _fail(f"Settings validation failed: {exc}")
+        return 2
+    except Exception as exc:
+        _fail(f"Internal error: {type(exc).__name__}: {exc}")
+        if debug:
+            traceback.print_exc()
+        return 2
+    _ok(f"Bake complete: {result.output_path} ({result.settings_count} settings)")
+    print(f"   filament_settings_id = {result.filament_settings_id}")
+    print(f"   nozzle_temperature   = {result.nozzle_temperature}")
+    if result.bs_ok is None:
+        _warn("BS validation skipped")
+    elif result.bs_ok:
+        _ok(f"BS validation: {result.bs_message}")
+    else:
+        _fail(f"BS validation failed: {result.bs_message}")
+        return 2
+    # Cleanup
+    try:
+        out.unlink()
+    except OSError:
+        pass
+    _ok("Self-test passed")
+    return 0
+
+
+def _print_decisions(
+    input_path: str,
+    nozzle_dec,
+    filament_dec,
+    tier: str,
+    status: dict | None,
+) -> None:
+    _info(f"🔍 Reading {input_path}")
+    if status is not None:
+        _ok(f"Live printer online — attached nozzle: {status.get('nozzle_diameter')}mm "
+            f"({status.get('nozzle_type', '?')})")
+        spools = status.get("spools") or []
+        for s in spools:
+            if s.get("type"):
+                label = (s.get("sub_brand") or s.get("type") or "?")
+                print(f"    AMS {s['slot']}: {label} ({s.get('remain', '?')}%)")
+    else:
+        _warn("Live printer offline (or unreachable) — proceeding with baked-in defaults")
+    print("🎯 Decisions:")
+    if nozzle_dec.attached is not None:
+        match = "matches attached ✅" if not nozzle_dec.mismatch else "MISMATCH ❌"
+        print(f"    Nozzle:   {nozzle_dec.nozzle}  ← {nozzle_dec.source} ({match})")
+    else:
+        print(f"    Nozzle:   {nozzle_dec.nozzle}  ← {nozzle_dec.source}")
+    print(f"    Filament: {filament_dec.material}  ← {filament_dec.source}")
+    print(f"    Quality:  {tier}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="bambu-easy",
+        description="Friendly CLI to prepare 3MF files for the Bambu Lab P2S.",
+        epilog="Run `bambu-easy --doctor` to verify your install.",
+    )
+    parser.add_argument("input", nargs="?", help="Source 3MF (typically a MakerWorld download)")
+    parser.add_argument("-o", "--output", help="Output path. Default: <input stem>_ready.3mf")
+    parser.add_argument("-q", "--quality", choices=QUALITY_TIERS, default="standard")
+    parser.add_argument("-f", "--filament", choices=SUPPORTED_MATERIALS, default=None,
+                        help="Override auto-detected filament.")
+    parser.add_argument("-n", "--nozzle", choices=SUPPORTED_NOZZLES, default=None,
+                        help="Override auto-detected nozzle (mm).")
+    parser.add_argument("--skip-bs-validate", action="store_true",
+                        help="Skip the headless BS slice (faster, less safe).")
+    parser.add_argument("--force", action="store_true",
+                        help="Bypass nozzle-mismatch hard-stop.")
+    parser.add_argument("--doctor", action="store_true",
+                        help="Check install: BS CLI + printer config + MQTT reachability.")
+    parser.add_argument("--self-test", action="store_true",
+                        help="Run end-to-end on bundled fixture.")
+    parser.add_argument("--debug", action="store_true",
+                        help="Show full Python traceback on unexpected errors.")
+    parser.add_argument("--version", action="version", version=f"bambu-easy {__version__}")
+    args = parser.parse_args(argv)
+
+    if args.doctor:
+        return cmd_doctor()
+    if args.self_test:
+        return cmd_self_test(skip_bs_validate=args.skip_bs_validate, debug=args.debug)
+
+    if not args.input:
+        parser.print_help()
+        return 0
+
+    input_path = args.input
+    if not os.path.exists(input_path):
+        _fail(f"Input file not found: {input_path}")
+        return 2
+    if not input_path.lower().endswith(".3mf"):
+        _warn(f"Input does not end in .3mf: {input_path}")
+
+    output_path = args.output or default_output(input_path)
+    if os.path.abspath(output_path) == os.path.abspath(input_path):
+        _fail("Output path must differ from input — refusing to overwrite the source.")
+        return 2
+
+    # 1. Try to query printer (best effort)
+    try:
+        cfg = load_config()
+    except PrinterConfigError as exc:
+        _warn(f"printer_config.json: {exc}")
+        cfg = None
+
+    status = None
+    if cfg is not None:
+        status = query_printer_status(cfg, timeout=6.0)
+
+    attached = status.get("nozzle_diameter") if status else None
+    spools = status.get("spools") if status else None
+
+    # 2. Resolve nozzle
+    try:
+        nozzle_dec = pick_nozzle(
+            source_3mf=input_path,
+            attached_diameter=attached,
+            override=args.nozzle,
+        )
+    except ValueError as exc:
+        _fail(str(exc))
+        return 2
+
+    # 3. Resolve filament
+    try:
+        filament_dec = pick_filament(
+            source_3mf=input_path,
+            spools=spools,
+            override=args.filament,
+        )
+    except FilamentResolutionError as exc:
+        _fail(str(exc))
+        return 2
+
+    _print_decisions(input_path, nozzle_dec, filament_dec, args.quality, status)
+
+    # 4. Hard-stop on nozzle mismatch
+    if nozzle_dec.mismatch and not args.force:
+        print()
+        _fail("Nozzle mismatch")
+        print(f"   You requested:    {nozzle_dec.nozzle}")
+        print(f"   Printer has:      {nozzle_dec.attached}mm")
+        print("   What to do:")
+        print(f"     Option 1: Swap to the {nozzle_dec.nozzle} nozzle on the printer, then re-run.")
+        print(f"     Option 2: Re-run without -n to use the {nozzle_dec.attached}mm nozzle.")
+        print("     Option 3: Re-run with --force to override (NOT recommended).")
+        return 1
+    if nozzle_dec.mismatch and args.force:
+        _warn(f"Nozzle mismatch overridden by --force ({nozzle_dec.nozzle} vs attached {nozzle_dec.attached}mm)")
+
+    # 5. Compose / bake / validate
+    print(f"🔧 Composing profile ({nozzle_dec.nozzle} + {filament_dec.material} + {args.quality})")
+    print("🔧 Baking settings into project_settings.config")
+    try:
+        result = prepare_3mf(
+            input_path=input_path,
+            output_path=output_path,
+            nozzle=nozzle_dec.nozzle,
+            material=filament_dec.material,
+            tier=args.quality,
+            do_bs_validate=not args.skip_bs_validate,
+        )
+    except ValidationError as exc:
+        _fail(f"Settings validation failed:\n{exc}")
+        return 2
+    except FileNotFoundError as exc:
+        _fail(f"File not found while baking: {exc}")
+        return 2
+    except Exception as exc:
+        _fail(f"Internal error: {type(exc).__name__}: {exc}. Please report this.")
+        if args.debug:
+            traceback.print_exc()
+        return 2
+
+    print("🔬 Static validation... clean")
+    if result.bs_ok is None:
+        _warn("BS slice validation skipped (--skip-bs-validate)")
+    elif result.bs_ok:
+        print(f"🔬 BS slice validation... {result.bs_message}")
+    else:
+        _fail(f"BS slice validation FAILED: {result.bs_message}")
+        print("   The output 3MF was written but Bambu Studio rejected it on slice.")
+        print("   Re-run with --debug, or open the file in BS to see the toast error.")
+        return 2
+
+    print()
+    _ok(f"Done! Open {output_path} in Bambu Studio and press Print.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

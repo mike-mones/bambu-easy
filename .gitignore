@@ -1,0 +1,17 @@
+# Real printer credentials — never commit
+printer_config.json
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+
+# Generated artifacts
+*_ready.3mf
+result.json
+.pytest_cache/

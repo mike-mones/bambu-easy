@@ -1,0 +1,28 @@
+[project]
+name = "bambu-easy"
+version = "0.1.0"
+description = "Friendly CLI to prepare 3MF files for the Bambu Lab P2S printer"
+requires-python = ">=3.10"
+authors = [{ name = "Mike Mones" }]
+readme = "README.md"
+dependencies = [
+  "paho-mqtt>=2.0",
+  "trimesh>=4.0",
+  "numpy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+bambu-easy = "bambu_easy.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["bambu_easy*"]
+
+[tool.setuptools.package-data]
+bambu_easy = ["../tests/fixtures/*.3mf"]
