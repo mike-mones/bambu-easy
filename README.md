@@ -101,6 +101,8 @@ Supported: `0.2`, `0.4`, `0.6`, `0.8` mm.
 | `--skip-bs-validate` | Skip the headless BS slice (saves 10–30s, less safe) |
 | `--no-open` | Don't auto-open the result in Bambu Studio (default opens automatically) |
 | `--force` | Bypass nozzle-mismatch hard-stop (NOT recommended) |
+| `--slot <SLOT>` | Pin filament to a specific AMS slot (e.g. `A2`). Defaults to "most filled". |
+| `--color <#RRGGBB>` | Set the filament color hex explicitly. Defaults to the AMS slot color. |
 | `--debug` | Show full Python traceback on unexpected errors |
 
 ## For power users: optional Copilot agent

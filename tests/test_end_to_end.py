@@ -30,8 +30,11 @@ def test_e2e_bake_pla_matte_standard(squish_3mf, tmp_path):
     assert merged["nozzle_diameter"] == ["0.4"]
     # Standard tier
     assert merged["layer_height"] == "0.20"
-    # print_settings_id cleared so BS uses our process settings
-    assert merged["print_settings_id"] == ""
+    # print_settings_id now points at the matching P2S process preset
+    # (was '' pre-2026-05-08; see PROCESS_PRESET_IDS in print_profiles.py)
+    assert merged["print_settings_id"] == "0.20mm Standard @BBL P2S"
+    # print_compatible_printers must reflect the chosen nozzle, not the source
+    assert merged["print_compatible_printers"] == ["Bambu Lab P2S 0.4 nozzle"]
 
 
 def test_e2e_petg_hf(squish_3mf, tmp_path):
@@ -113,7 +116,8 @@ def test_e2e_converts_x1c_makerworld_to_p2s(squish_3mf, tmp_path):
 
     # Every X1C-specific field must be replaced with the P2S equivalent
     assert merged["printer_settings_id"] == "Bambu Lab P2S 0.4 nozzle"
-    assert merged["print_settings_id"] == ""
+    assert merged["print_settings_id"] == "0.20mm Standard @BBL P2S"
+    assert merged["print_compatible_printers"] == ["Bambu Lab P2S 0.4 nozzle"]
     assert merged["filament_settings_id"][0].startswith("Mike PLA Matte 230C")
     assert merged["nozzle_temperature"] == ["230"]
     assert merged["curr_bed_type"] == "Textured PEI Plate"

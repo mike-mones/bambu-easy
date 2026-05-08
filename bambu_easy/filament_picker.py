@@ -17,6 +17,7 @@ class FilamentDecision:
     material: str
     source: str
     slot: str | None = None  # e.g. "A1"
+    color: str | None = None  # hex like '#B76E79' from AMS, or None
 
 
 def _map_name_to_material(raw: str) -> str | None:
@@ -56,6 +57,22 @@ def read_filament_from_3mf(path: str) -> str | None:
     return None
 
 
+def _spool_color_hex(spool: dict) -> str | None:
+    """Return a '#RRGGBB' hex color from an AMS spool dict, or None.
+
+    Bambu MQTT returns tray_color as 8-char RRGGBBAA (e.g. 'B76E79FF').
+    BS project_settings.config wants '#RRGGBB' (no alpha).
+    """
+    raw = (spool.get("color") or "").strip().upper()
+    if not raw:
+        return None
+    if raw.startswith("#"):
+        raw = raw[1:]
+    if len(raw) >= 6 and all(c in "0123456789ABCDEF" for c in raw[:6]):
+        return f"#{raw[:6]}"
+    return None
+
+
 def _spool_label(spool: dict) -> str:
     """Best-effort name string from a spool dict."""
     sub = spool.get("sub_brand") or ""
@@ -76,7 +93,22 @@ def pick_filament(
                 f"Unsupported filament {override!r}. Supported: "
                 f"{', '.join(SUPPORTED_MATERIALS)}."
             )
-        return FilamentDecision(material=override, source="user override (--filament)")
+        # If the user override matches a loaded spool, harvest its color too.
+        # This lets `--filament "PLA Silk+"` still get the correct AMS color.
+        color = None
+        slot = None
+        if spools:
+            for sp in spools:
+                if sp.get("type") and _map_name_to_material(_spool_label(sp)) == override:
+                    color = _spool_color_hex(sp)
+                    slot = sp.get("slot")
+                    break
+        return FilamentDecision(
+            material=override,
+            source="user override (--filament)",
+            slot=slot,
+            color=color,
+        )
 
     # AMS path
     if spools:
@@ -91,6 +123,7 @@ def pick_filament(
                             material=mat,
                             source=f"AMS {sp['slot']} ({name})",
                             slot=sp["slot"],
+                            color=_spool_color_hex(sp),
                         )
         # Most-filled loaded spool that maps
         loaded = [s for s in spools if s.get("type") and _map_name_to_material(_spool_label(s))]
@@ -109,6 +142,7 @@ def pick_filament(
                 material=mat,
                 source=f"AMS {best['slot']} most filled ({name})",
                 slot=best["slot"],
+                color=_spool_color_hex(best),
             )
 
     # Fallback to baked filament_settings_id

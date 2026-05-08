@@ -1,4 +1,4 @@
-# VENDORED FROM /Users/mikemones/Documents/3D Printing/Scripts/print_profiles.py at commit 4a8bb90ad5f901257066081baea1a40473d3cb68. Do not edit here — sync via tools/sync_engine.sh.
+# VENDORED FROM /Users/mikemones/Documents/3D Printing/Scripts/print_profiles.py at commit b5cf84b3bde80787f98ff92805d64702d43dd67b. Do not edit here — sync via tools/sync_engine.sh.
 
 """Global print profiles for the Bambu Lab P2S.
 
@@ -223,6 +223,53 @@ FILAMENT_PRESET_IDS = {
     ("0.2mm", "PETG-HF"):    "Bambu PETG HF @BBL P2S 0.2 nozzle",
     ("0.6mm", "PETG-HF"):    "Bambu PETG HF @BBL P2S 0.6 nozzle",
     ("0.8mm", "PETG-HF"):    "Bambu PETG HF @BBL P2S 0.8 nozzle",
+}
+
+# =============================================================================
+# PROCESS PRESET IDS — per (nozzle, tier) → BS process preset name
+#
+# When a 3MF is retargeted from another printer (e.g. an A1 MakerWorld file
+# being prepared for the P2S), its `print_settings_id` ends up empty or
+# stale, and `print_compatible_printers` may still reference the old printer.
+# BS rejects on slice with "The selected printer is not compatible with the
+# process preset in the 3mf." (rc=-17). Fix: compose_profile() injects a
+# valid P2S process preset matching the chosen nozzle and tier, and rewrites
+# print_compatible_printers to match the chosen nozzle.
+#
+# Names match the canonical `name` field of the system preset JSON; verified
+# against ~/Library/Application Support/BambuStudio/system/BBL/process/.
+# Source-of-failure: 2026-05-08 wife-test on twisty golf ball MakerWorld 3MF.
+# =============================================================================
+
+PROCESS_PRESET_IDS = {
+    # 0.4mm — system "@BBL P2S" presets (no nozzle suffix)
+    ("0.4mm", "fast"):     "0.24mm Standard @BBL P2S",
+    ("0.4mm", "standard"): "0.20mm Standard @BBL P2S",
+    ("0.4mm", "quality"):  "0.16mm High Quality @BBL P2S",
+    ("0.4mm", "premium"):  "0.12mm High Quality @BBL P2S",
+    # 0.2mm — system "@BBL P2S 0.2 nozzle" presets
+    ("0.2mm", "fast"):     "0.12mm Balanced Quality @BBL P2S 0.2 nozzle",
+    ("0.2mm", "standard"): "0.10mm Standard @BBL P2S 0.2 nozzle",
+    ("0.2mm", "quality"):  "0.12mm Balanced Quality @BBL P2S 0.2 nozzle",
+    ("0.2mm", "premium"):  "0.08mm High Quality @BBL P2S 0.2 nozzle",
+    # 0.6mm
+    ("0.6mm", "fast"):     "0.30mm Standard @BBL P2S 0.6 nozzle",
+    ("0.6mm", "standard"): "0.30mm Standard @BBL P2S 0.6 nozzle",
+    ("0.6mm", "quality"):  "0.24mm Balanced Quality @BBL P2S 0.6 nozzle",
+    ("0.6mm", "premium"):  "0.18mm Balanced Quality @BBL P2S 0.6 nozzle",
+    # 0.8mm
+    ("0.8mm", "fast"):     "0.40mm Standard @BBL P2S 0.8 nozzle",
+    ("0.8mm", "standard"): "0.40mm Standard @BBL P2S 0.8 nozzle",
+    ("0.8mm", "quality"):  "0.32mm Balanced Quality @BBL P2S 0.8 nozzle",
+    ("0.8mm", "premium"):  "0.24mm Balanced Quality @BBL P2S 0.8 nozzle",
+}
+
+# (nozzle → P2S printer model name expected in print_compatible_printers)
+COMPATIBLE_PRINTERS = {
+    "0.4mm": ["Bambu Lab P2S 0.4 nozzle"],
+    "0.2mm": ["Bambu Lab P2S 0.2 nozzle"],
+    "0.6mm": ["Bambu Lab P2S 0.6 nozzle"],
+    "0.8mm": ["Bambu Lab P2S 0.8 nozzle"],
 }
 
 # =============================================================================
@@ -646,6 +693,20 @@ def compose_profile(nozzle: str, material: str, tier: str) -> dict:
     preset_id = FILAMENT_PRESET_IDS.get((nozzle, material))
     if preset_id:
         result["filament_settings_id"] = [preset_id]
+
+    # Resolve print_settings_id and print_compatible_printers per (nozzle, tier).
+    # When bambu-easy retargets a foreign-printer 3MF (e.g. MakerWorld A1
+    # source) onto the P2S, BS clears `print_settings_id` and leaves the
+    # source's stale `print_compatible_printers`. BS then rejects the file
+    # at slice time with "The selected printer is not compatible with the
+    # process preset in the 3mf." (rc=-17). Injecting both here closes the
+    # gap. Source-of-failure: 2026-05-08 wife-test, twisty golf ball.
+    process_id = PROCESS_PRESET_IDS.get((nozzle, tier))
+    if process_id:
+        result["print_settings_id"] = process_id
+    compatible = COMPATIBLE_PRINTERS.get(nozzle)
+    if compatible:
+        result["print_compatible_printers"] = list(compatible)
 
     return result
 

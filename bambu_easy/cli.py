@@ -214,6 +214,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-q", "--quality", choices=QUALITY_TIERS, default="standard")
     parser.add_argument("-f", "--filament", choices=SUPPORTED_MATERIALS, default=None,
                         help="Override auto-detected filament.")
+    parser.add_argument("--slot", default=None,
+                        help='Prefer a specific AMS slot, e.g. "A2". Overrides "most filled".')
+    parser.add_argument("--color", default=None,
+                        help="Filament color hex like '#B76E79'. Defaults to AMS slot color when known.")
     parser.add_argument("-n", "--nozzle", choices=SUPPORTED_NOZZLES, default=None,
                         help="Override auto-detected nozzle (mm).")
     parser.add_argument("--skip-bs-validate", action="store_true",
@@ -327,6 +331,7 @@ def main(argv: list[str] | None = None) -> int:
             source_3mf=input_path,
             spools=spools,
             override=args.filament,
+            slot_hint=args.slot,
         )
     except FilamentResolutionError as exc:
         _fail(str(exc))
@@ -351,6 +356,7 @@ def main(argv: list[str] | None = None) -> int:
     # 5. Compose / bake / validate
     print(f"🔧 Composing profile ({nozzle_dec.nozzle} + {filament_dec.material} + {args.quality})")
     print("🔧 Baking settings into project_settings.config")
+    chosen_color = args.color or filament_dec.color
     try:
         result = prepare_3mf(
             input_path=input_path,
@@ -359,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             material=filament_dec.material,
             tier=args.quality,
             do_bs_validate=not args.skip_bs_validate,
+            filament_color=chosen_color,
         )
     except ValidationError as exc:
         _fail(f"Settings validation failed:\n{exc}")

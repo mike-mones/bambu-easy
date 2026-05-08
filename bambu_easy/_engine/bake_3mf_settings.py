@@ -1,4 +1,4 @@
-# VENDORED FROM /Users/mikemones/Documents/3D Printing/Scripts/bake_3mf_settings.py at commit 4a8bb90ad5f901257066081baea1a40473d3cb68. Do not edit here — sync via tools/sync_engine.sh.
+# VENDORED FROM /Users/mikemones/Documents/3D Printing/Scripts/bake_3mf_settings.py at commit b5cf84b3bde80787f98ff92805d64702d43dd67b. Do not edit here — sync via tools/sync_engine.sh.
 
 #!/usr/bin/env python3
 """
@@ -135,9 +135,15 @@ def bake_settings(target_path: str, output_path: str,
             print(f"  Applied {len(overrides)} explicit overrides")
 
         # Clear print_settings_id so BS uses our custom process settings
-        # instead of loading a built-in profile that overrides them.
-        # Keep filament_settings_id so BS can match to AMS spools.
-        merged['print_settings_id'] = ''
+        # instead of loading a built-in profile that overrides them — UNLESS
+        # the caller explicitly provided a print_settings_id override (this
+        # is the post-2026-05-08 path for retargeted MakerWorld 3MFs, where
+        # an empty print_settings_id paired with a non-P2S
+        # print_compatible_printers triggers BS rc=-17 "process preset not
+        # compatible" at slice time). When the caller knows the right P2S
+        # preset to use, trust them.
+        if not (overrides and overrides.get("print_settings_id")):
+            merged['print_settings_id'] = ''
 
         new_settings = json.dumps(merged, indent=4, ensure_ascii=False)
 
