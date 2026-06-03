@@ -95,6 +95,7 @@ Supported: `0.2`, `0.4`, `0.6`, `0.8` mm.
 | `Nozzle mismatch` | Either swap the physical nozzle on the printer to match, or re-run without `-n`. Use `--force` only if you know what you're doing. |
 | `Could not determine filament` | Either load a recognized spool in the AMS, or pass `-f "PLA Matte"` (etc.) explicitly. |
 | `Source 3MF was built for <printer>. Retargeting...` | Just informational — the file was uploaded for a non-P2S printer; bambu-easy is calling Bambu Studio CLI to convert it. Takes ~10s. |
+| `Re-arranged object onto plate: centred...` | Just informational — the source was a bare-geometry / web-tool export (no printer arrangement) that landed off the plate, so bambu-easy recentred it on the P2S bed. MakerWorld files already arranged on a plate are left untouched. |
 | `Auto-conversion failed` | Open Bambu Studio at least once so it has its system presets installed. If it still fails, follow the manual fallback printed beneath the error. |
 | `BS slice validation FAILED` | Open the output `_ready.3mf` in Bambu Studio to see the toast error. The validator caught a setting BS won't accept; try a different quality tier or report the file. |
 

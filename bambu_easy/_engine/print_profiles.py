@@ -1,4 +1,4 @@
-# VENDORED FROM /Users/mikemones/Documents/3D Printing/Scripts/print_profiles.py at commit b5cf84b3bde80787f98ff92805d64702d43dd67b. Do not edit here — sync via tools/sync_engine.sh.
+# VENDORED FROM /Users/mikemones/Documents/3D Printing/Scripts/print_profiles.py at commit 6f7017de4c794e4343a5136e7a7cf116a14efaa5. Do not edit here — sync via tools/sync_engine.sh.
 
 """Global print profiles for the Bambu Lab P2S.
 
@@ -129,8 +129,8 @@ MATERIALS = {
         "filament_type": ["PLA"],
         "nozzle_temperature": ["230"],
         "nozzle_temperature_initial_layer": ["230"],
-        "textured_plate_temp": ["55"],
-        "textured_plate_temp_initial_layer": ["55"],
+        "textured_plate_temp": ["65"],
+        "textured_plate_temp_initial_layer": ["65"],
         "cool_plate_temp": ["35"],
         "cool_plate_temp_initial_layer": ["35"],
         "curr_bed_type": "Textured PEI Plate",
@@ -148,8 +148,8 @@ MATERIALS = {
         "filament_type": ["PLA"],
         "nozzle_temperature": ["230"],
         "nozzle_temperature_initial_layer": ["230"],
-        "textured_plate_temp": ["55"],
-        "textured_plate_temp_initial_layer": ["55"],
+        "textured_plate_temp": ["65"],
+        "textured_plate_temp_initial_layer": ["65"],
         "cool_plate_temp": ["35"],
         "cool_plate_temp_initial_layer": ["35"],
         "curr_bed_type": "Textured PEI Plate",
@@ -707,6 +707,26 @@ def compose_profile(nozzle: str, material: str, tier: str) -> dict:
     compatible = COMPATIBLE_PRINTERS.get(nozzle)
     if compatible:
         result["print_compatible_printers"] = list(compatible)
+
+    # P2S-invariant pins so a printer-less / foreign source 3MF can't leak an
+    # invalid INHERITED value past the merged-settings validation. These win
+    # because bake applies the composed profile as overrides on top of the
+    # source's project_settings.config. Source of failure: 2026-06-03 gridfinity
+    # baseplate (bare-geometry 3MF from gridfinitylayouttool.com).
+    #   - top/bottom_surface_pattern: BS CLI retarget of a printer-less 3MF
+    #     injects 'zig-zag', which BS accepts only for infill, not surface
+    #     patterns. setdefault so a tier that already pins a valid value wins.
+    result.setdefault("top_surface_pattern", "monotonicline")
+    result.setdefault("bottom_surface_pattern", "monotonic")
+    #   - filament_extruder_variant: the P2S data model encodes 2 extruder
+    #     variants; a length-1 array triggers std::out_of_range ('vector' parse
+    #     error / "no geometry data") in BS. Always pin length 2.
+    result["filament_extruder_variant"] = ["Direct Drive Standard",
+                                           "Direct Drive High Flow"]
+    #   - printable_area: a printer-less source retargets with a stale 200x200
+    #     bed, so BS rejects any part >200mm as "no object fully inside the
+    #     plate" (rc=-50). Pin the P2S 256x256 bed polygon.
+    result["printable_area"] = ["0x0", "256x0", "256x256", "0x256"]
 
     return result
 

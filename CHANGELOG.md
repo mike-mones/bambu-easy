@@ -2,6 +2,38 @@
 
 All notable changes to bambu-easy. Newest first.
 
+## 0.1.2 — 2026-06-03
+
+### Fixed (CRITICAL — off-plate bare-geometry sources)
+
+- **Bare-geometry / web-tool 3MFs (e.g. gridfinitylayouttool.com exports) no
+  longer fail BS slice with rc=-50** ("object is not fully inside the plate").
+  Root cause: bambu-easy assumed MakerWorld-style pre-arranged sources and had
+  no arrange/centre step. When the BS CLI retargets a printer-less 3MF it
+  re-centres the mesh's *local* coords to the origin but leaves a build-item
+  translation that drops the object off the front of the plate (world Y
+  -294..-40 for the gridfinity piece). `--arrange 1` on the BS CLI does **not**
+  fix this. Fix: new `_ensure_on_plate()` in `prepare.py` rewrites the build
+  `<item transform>` translation so the object's world XY bbox centres on the
+  P2S plate (128,128). It runs after the bake/normalize step (so the 256×256
+  printable_area is already in place) and before BS slice validation. The step
+  is idempotent — files already fully on the plate (all MakerWorld arranged
+  sources) are untouched. The CLI now prints a "🪄 Re-arranged object onto
+  plate" line when a shift was applied.
+  Source-of-failure: `gridfinity-baseplate-5x12-padded-connectors_piece-a.3mf`.
+
+### Fixed
+
+- **PLA Matte / PLA Silk+ now bake the Textured PEI bed at 65°C** (was 55°C).
+  The 55°C value in `_engine/print_profiles.py` MATERIALS contradicted the
+  VERIFIED first-layer-adhesion temp; every Matte/Silk+ bake was 10°C low.
+  PLA Basic stays 55°C, PETG-HF 80°C.
+
+### Tests
+
+- Added `tests/test_ensure_on_plate.py` (centring, idempotency, no-op on an
+  already-on-plate file). Suite now 39 passing.
+
 ## 0.1.1 — 2026-05-08
 
 ### Fixed (CRITICAL — wife test)

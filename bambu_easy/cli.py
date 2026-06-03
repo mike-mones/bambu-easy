@@ -380,6 +380,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print("🔬 Static validation... clean")
+    for w in result.warnings:
+        print(f"🪄 {w}")
     if result.bs_ok is None:
         _warn("BS slice validation skipped (--skip-bs-validate)")
     elif result.bs_ok:

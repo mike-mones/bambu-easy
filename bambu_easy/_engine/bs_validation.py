@@ -1,4 +1,4 @@
-# VENDORED FROM /Users/mikemones/Documents/3D Printing/Scripts/bs_validation.py at commit b5cf84b3bde80787f98ff92805d64702d43dd67b. Do not edit here — sync via tools/sync_engine.sh.
+# VENDORED FROM /Users/mikemones/Documents/3D Printing/Scripts/bs_validation.py at commit 6f7017de4c794e4343a5136e7a7cf116a14efaa5. Do not edit here — sync via tools/sync_engine.sh.
 
 """Bambu Studio settings validation — both static (enum + cross-rules) and
 oracle (headless BS CLI slice).
