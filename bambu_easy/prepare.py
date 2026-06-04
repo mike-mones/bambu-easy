@@ -40,39 +40,96 @@ def _suppress_stdout(fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
 
-def _normalize_to_single_filament(zip_path: str, color: str | None = None) -> int:
-    """Trim per-filament arrays in project_settings.config to length 1.
+# Cooling / fan options that Bambu Studio stores PER-FILAMENT (Filament →
+# Cooling tab) even though they read like process settings. They scale with the
+# filament count, so they must keep the same array length as every other
+# per-filament option or BS rejects the project.
+_PER_FILAMENT_COOLING_KEYS = {
+    "fan_max_speed",
+    "fan_min_speed",
+    "overhang_fan_speed",
+    "overhang_fan_threshold",
+    "close_fan_the_first_x_layers",
+    "slow_down_for_layer_cooling",
+    "slow_down_layer_time",
+    "slow_down_min_speed",
+    "fan_cooling_layer_time",
+    "additional_cooling_fan_speed",
+    "reduce_fan_stop_start_freq",
+    "full_fan_speed_layer",
+    "enable_overhang_bridge_fan",
+}
 
-    MakerWorld 3MFs frequently embed N filaments (one per AMS slot) even
-    when a model uses just one. After bambu-easy bakes a single-filament
-    profile on top, the per-filament arrays (`filament_colour`,
-    `*_plate_temp*`, etc.) are still length N. BS will then offer to map
-    every slot to an AMS spool in the Send dialog — confusing for the
-    user and historically the trigger of the PSA card holder Mar 19
-    failure (mismatched array lengths → second extruder defaulted to
-    0°C). Normalizing here keeps the file unambiguously single-color.
 
-    Optionally sets `filament_colour[0]` to a hex like '#B76E79' so the
-    AMS dialog displays the correct color.
+def _is_per_filament_key(key: str) -> bool:
+    """Whether a project_settings key holds one value per filament slot.
 
-    Returns the number of arrays trimmed (for diagnostics).
+    BS validates that every per-filament option's array length matches the
+    filament count. Anything that scales with the number of filaments lands
+    here; true process scalars (wall speeds, layer height, infill) do not.
     """
-    import json
+    if key.startswith("filament"):
+        return True
+    if key.startswith("nozzle_temperature"):
+        return True
+    if "plate_temp" in key:  # hot/cool/eng/textured/supertack _plate_temp[_*]
+        return True
+    if key in _PER_FILAMENT_COOLING_KEYS:
+        return True
+    if key in ("chamber_temperatures", "required_nozzle_HRC",
+               "default_filament_colour"):
+        return True
+    return False
+
+
+def _read_source_lengths(source_path: str) -> dict[str, int]:
+    """Map per-filament key -> array length in the (GUI-valid) source 3MF."""
+    with zipfile.ZipFile(source_path, "r") as z:
+        cfg = json.loads(z.read("Metadata/project_settings.config"))
+    return {
+        k: len(v)
+        for k, v in cfg.items()
+        if isinstance(v, list) and _is_per_filament_key(k)
+    }
+
+
+def _normalize_filament_array_lengths(
+    zip_path: str,
+    source_lengths: dict[str, int],
+    color: str | None = None,
+) -> int:
+    """Re-align every per-filament array to the source's filament count.
+
+    The bug this fixes (failure-log 2026-06-04): a MakerWorld source is a
+    *self-consistent* N-filament project (e.g. N=2, one per AMS slot) that the
+    BS GUI opens fine. When bambu-easy bakes a single-filament profile, the
+    bake/compose step shrinks SOME per-filament arrays to length 1
+    (`filament_settings_id`, `nozzle_temperature`, plate temps, fan speeds…)
+    while leaving the rest at the source length. The result claims 1 filament
+    in some keys and N in others — an inconsistency the headless BS slicer
+    tolerates but the GUI rejects with **"Invalid configuration file"**.
+
+    Reducing the project to a *true* single filament is not robust: ground
+    truth from a valid single-filament 3MF shows the per-key single-filament
+    lengths are idiosyncratic (e.g. `flush_volumes_vector` is length 8 for one
+    filament), so there is no length = source_len / N formula. Instead we keep
+    the source's filament count and **broadcast the baked value across every
+    slot**, so the output stays structurally identical to the GUI-valid source
+    (only the values change). For a single-color model the extra slot is
+    harmless — both slots carry the same filament.
+
+    `source_lengths` is the per-filament-key → length map from the SOURCE 3MF
+    (see `_read_source_lengths`). Only keys whose current length differs from
+    the source are touched, so the pass is idempotent and leaves correctly
+    sized arrays (including bare-geometry single-filament sources) alone.
+
+    Returns the number of arrays re-aligned (for diagnostics).
+    """
     import os
     import shutil
     import tempfile
 
-    # The set of project_settings keys that BS treats as "per-filament":
-    PER_FILAMENT_KEYS = {
-        "filament_colour",
-        "hot_plate_temp", "hot_plate_temp_initial_layer",
-        "cool_plate_temp", "cool_plate_temp_initial_layer",
-        "eng_plate_temp", "eng_plate_temp_initial_layer",
-        "textured_plate_temp", "textured_plate_temp_initial_layer",
-        "supertack_plate_temp", "supertack_plate_temp_initial_layer",
-    }
-
-    trimmed = 0
+    fixed = 0
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".3mf")
     os.close(tmp_fd)
     try:
@@ -82,13 +139,27 @@ def _normalize_to_single_filament(zip_path: str, color: str | None = None) -> in
                 data = zin.read(item.filename)
                 if item.filename == "Metadata/project_settings.config":
                     settings = json.loads(data)
-                    for k in PER_FILAMENT_KEYS:
-                        v = settings.get(k)
-                        if isinstance(v, list) and len(v) > 1:
-                            settings[k] = v[:1]
-                            trimmed += 1
-                    if color:
-                        settings["filament_colour"] = [color]
+                    for key, target_len in source_lengths.items():
+                        if target_len < 1 or key not in settings:
+                            continue
+                        cur = settings[key]
+                        # Normalize current value to a non-empty list so we can
+                        # broadcast its first (baked) entry across all slots.
+                        if isinstance(cur, list):
+                            if not cur:
+                                continue
+                            seed = cur[0]
+                            cur_len = len(cur)
+                        else:
+                            seed = cur
+                            cur_len = None
+                        if cur_len == target_len:
+                            continue
+                        settings[key] = [seed] * target_len
+                        fixed += 1
+                    if color and "filament_colour" in settings:
+                        n = len(settings["filament_colour"]) or 1
+                        settings["filament_colour"] = [color] * n
                     data = json.dumps(settings, indent=4).encode("utf-8")
                 zout.writestr(item, data)
         shutil.move(tmp_path, zip_path)
@@ -98,7 +169,7 @@ def _normalize_to_single_filament(zip_path: str, color: str | None = None) -> in
                 os.remove(tmp_path)
             except OSError:
                 pass
-    return trimmed
+    return fixed
 
 
 # Plate geometry for the Bambu Lab P2S. The printable area is a 256×256 square
@@ -311,10 +382,17 @@ def prepare_3mf(
         overrides=profile,
     )
 
-    # Single-color normalization: source 3MFs are often multi-filament even
-    # when only one is used. Trim per-filament arrays to length 1 so the
-    # AMS Send dialog isn't confused.
-    _normalize_to_single_filament(str(output_path), color=filament_color)
+    # Per-filament array consistency: source 3MFs are often multi-filament
+    # (one slot per AMS bay) even when a model uses one color. The bake step
+    # shrinks SOME per-filament arrays to length 1 and leaves the rest at the
+    # source length, which BS's GUI rejects as "Invalid configuration file"
+    # (the headless slicer tolerates it). Re-align every per-filament array to
+    # the source's filament count so the output stays as self-consistent as the
+    # GUI-valid source. See failure-log 2026-06-04.
+    source_lengths = _read_source_lengths(str(input_path))
+    _normalize_filament_array_lengths(
+        str(output_path), source_lengths, color=filament_color
+    )
 
     # Ensure the object sits on the plate. Bare-geometry / web-tool sources
     # (and BS-CLI retargets of them) can land off-plate, which BS rejects with

@@ -2,6 +2,40 @@
 
 All notable changes to bambu-easy. Newest first.
 
+# Changelog
+
+All notable changes to bambu-easy. Newest first.
+
+## 0.1.3 — 2026-06-04
+
+### Fixed (CRITICAL — GUI "Invalid configuration file" on multi-filament sources)
+
+- **MakerWorld 3MFs that embed multiple filaments (one per AMS slot) no longer
+  produce a file the Bambu Studio GUI rejects with "Invalid configuration
+  file"** — even though the headless BS slice oracle passed `rc=0`. Root cause:
+  the old `_normalize_to_single_filament` trimmed a hardcoded ~11-key whitelist
+  of per-filament arrays to length 1, while `bake`/`compose` independently
+  shrank `filament_settings_id`, `nozzle_temperature`, plate temps, etc. to
+  length 1. The remaining ~70 `filament_*` arrays stayed at the source's
+  filament count N. The result declared 1 filament in some keys and N in
+  others — an inconsistency the headless slicer tolerates (it reads only the
+  first entry it needs) but the GUI validator rejects.
+- Reducing the project to a *true* single filament is not robust: ground truth
+  from a valid single-filament 3MF shows per-key single-filament lengths are
+  idiosyncratic (e.g. `flush_volumes_vector` is length 8 for ONE filament), so
+  there is no `length = source_len / N` formula.
+- **Fix**: replaced `_normalize_to_single_filament` with
+  `_normalize_filament_array_lengths`, which reads the SOURCE 3MF's per-filament
+  array lengths and re-aligns every per-filament array in the output to the
+  source count, **broadcasting the baked value across all slots**. The output
+  stays as self-consistent as the GUI-valid source; only the values change. For
+  a single-color model the extra slot is harmless (both slots carry the same
+  filament). Per-filament keys are detected by `_is_per_filament_key`
+  (`filament*` / `nozzle_temperature*` / `*plate_temp*` / cooling-fan keys).
+  Idempotent — bare-geometry single-filament sources are untouched.
+- Regression coverage: `tests/test_normalize_filament_lengths.py` (4 tests).
+  Full suite 43 passing.
+
 ## 0.1.2 — 2026-06-03
 
 ### Fixed (CRITICAL — off-plate bare-geometry sources)
