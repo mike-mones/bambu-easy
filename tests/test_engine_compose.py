@@ -47,3 +47,15 @@ def test_petg_temps():
 def test_pla_basic_220c():
     p = compose_profile(nozzle="0.4mm", material="PLA Basic", tier="standard")
     assert p["nozzle_temperature"] == ["220"]
+
+
+def test_nozzle_volume_type_pinned_standard():
+    """Mike's P2S runs Standard-flow nozzles only; compose must hard-pin
+    nozzle_volume_type=Standard so a High Flow source 3MF can't leak through
+    retarget and break the BS slice. Source of failure: 2026-06-08 baskets."""
+    for nozzle in ("0.2mm", "0.4mm", "0.6mm", "0.8mm"):
+        for material in MATERIALS:
+            p = compose_profile(nozzle=nozzle, material=material, tier="standard")
+            assert p["nozzle_volume_type"] == ["Standard"], \
+                f"{nozzle}/{material} nozzle_volume_type is {p.get('nozzle_volume_type')!r}"
+            assert p["default_nozzle_volume_type"] == ["Standard"]

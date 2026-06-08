@@ -723,6 +723,18 @@ def compose_profile(nozzle: str, material: str, tier: str) -> dict:
     #     error / "no geometry data") in BS. Always pin length 2.
     result["filament_extruder_variant"] = ["Direct Drive Standard",
                                            "Direct Drive High Flow"]
+    #   - nozzle_volume_type: Mike's P2S runs STANDARD-flow nozzles only
+    #     (0.2/0.4/0.6/0.8 hardened steel — no Bambu High Flow hotend owned). A
+    #     source 3MF from a High Flow project (e.g. the 0.8 HF A/B test) leaks
+    #     nozzle_volume_type=["High Flow"] through retarget, which BS cannot
+    #     reconcile against the selected Standard extruder at slice time:
+    #     "could not found extruder_type Direct Drive, nozzle_volume_type High
+    #     Flow". Hard-pin Standard so a retargeted file always matches the
+    #     physical nozzle. Source of failure: 2026-06-08 0.4/0.6 solid baskets
+    #     (both inherited High Flow from the 0.8 source, manually patched twice).
+    #     NOTE: add a flag here if Mike ever installs a Bambu High Flow hotend.
+    result["nozzle_volume_type"] = ["Standard"]
+    result.setdefault("default_nozzle_volume_type", ["Standard"])
     #   - printable_area: a printer-less source retargets with a stale 200x200
     #     bed, so BS rejects any part >200mm as "no object fully inside the
     #     plate" (rc=-50). Pin the P2S 256x256 bed polygon.

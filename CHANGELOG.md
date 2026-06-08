@@ -2,9 +2,22 @@
 
 All notable changes to bambu-easy. Newest first.
 
-# Changelog
+## 0.1.4 — 2026-06-08
 
-All notable changes to bambu-easy. Newest first.
+### Fixed (BS slice errors on High Flow source 3MFs)
+
+- **`compose_profile()` now hard-pins `nozzle_volume_type=["Standard"]`** (and
+  `default_nozzle_volume_type`). Previously a source 3MF from a High Flow
+  project (e.g. an 0.8mm High Flow A/B test) leaked `nozzle_volume_type=["High
+  Flow"]` straight through retarget. BS could not reconcile that against the
+  selected Standard extruder and logged at slice time: `could not found
+  extruder_type Direct Drive, nozzle_volume_type High Flow, filament_index ...`.
+  Mike's P2S runs Standard-flow nozzles only (0.2/0.4/0.6/0.8 hardened steel —
+  no Bambu High Flow hotend), so Standard is the correct invariant. Add a flag
+  here if an HF hotend is ever installed. Source of failure: 2026-06-08 0.4/0.6
+  solid baskets, both inherited High Flow and had to be patched by hand twice.
+  Regression test: `tests/test_engine_compose.py::test_nozzle_volume_type_pinned_standard`.
+
 
 ## 0.1.3 — 2026-06-04
 
